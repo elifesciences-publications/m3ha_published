@@ -1,0 +1,50 @@
+Row,cellName,cellId,candidateId,rankNum,isWellFitted,noSpontEpasRange2Cell,responseStr2Cell,noSpontEpasRange200Cell,responseStr200Cell,forHetero,has-70,has-65,has-60,usedCurveFit,usedD101310,usedB101310,iterNumber,goodResponseVtraub63,forHeteroVtraub63,responseStrVtraub63,rankNum20200203,isWellFitted20200203,goodResponse20200204,forHetero20200204,responseStr20200204,isWellFitted20200208,goodResponse20200208,forHetero20200208,goodEpasRange200Cell20200312,responseStr20200208
+C101210,C101210,35,25,1,1,from-72to-60,good_response,from-72to-60,good_response,0,0,0,1,0,1,0,95,1,1,good_up_to_gIncr33,1,1,0,0,spontaneous,1,0,0,NA,spontaneous
+K092810,K092810,20,14,2,1,from-75to-60,little_response,from-75to-60,little_response,1,0,1,0,0,0,1,101,1,1,good_up_to_gIncr17,2,1,1,1,good_up_to_gIncr17,1,1,1,From -75 to -60,good_up_to_gIncr33
+H101310,H101310,49,36,3,1,from-75to-60,good_response,from-75to-60,good_response,1,1,0,0,0,1,0,97,1,1,good_up_to_gIncr17,4,1,1,1,good_up_to_gIncr17,1,1,1,From -74 to -60,good_up_to_gIncr33
+B100810,B100810,30,22,4,1,from-73to-60,good_response,from-73to-60,good_response,0,0,1,0,0,1,0,95,1,1,good_up_to_gIncr33,5,1,1,1,good_up_to_gIncr33,1,1,1,None,good_up_to_gIncr33
+E091810,E091810,5,5,5,1,from-75to-60,no_response,from-75to-60,no_response,1,1,0,0,0,1,0,95,0,0,no_response,6,1,0,0,no_response,1,0,0,NA,no_response
+D101310,D101310,45,32,6,1,from-75to-60,good_response,from-75to-60,good_response,1,1,1,1,1,0,0,99,1,1,good_up_to_gIncr33,7,1,1,1,good_up_to_gIncr33,1,1,1,From -75 to -60,good_up_to_gIncr33
+F101310,F101310,47,34,7,1,from-75to-60,no_response,from-75to-60,no_response,1,1,0,1,0,1,0,99,0,0,not_good_for_pharm3,8,1,0,0,not_good_for_pharm3,1,0,0,NA,not_good_for_pharm3
+E100110,E100110,28,20,8,1,from-74to-60,good_response,from-75to-60,good_response,1,1,1,0,0,1,0,95,1,1,good_up_to_gIncr17,9,1,1,1,good_up_to_gIncr33,1,1,1,From -75 to -60,good_up_to_gIncr33
+G101310,G101310,48,35,9,1,from-75to-60,okay_response,from-75to-60,okay_response,1,0,0,1,1,0,0,99,1,1,good_up_to_gIncr17,10,1,1,1,good_up_to_gIncr17,1,1,1,From -75 to -61,good_up_to_gIncr17
+I101210,I101210,40,29,10,1,from-75to-60,good_response,from-75to-60,little_response,1,0,1,0,0,0,1,102,1,1,good_up_to_gIncr33,12,1,1,1,good_up_to_gIncr33,1,1,1,From -75 to -60,good_up_to_gIncr33
+E091710,E091710,2,2,11,1,from-75to-60,no_response,from-75to-60,no_response,1,1,0,0,0,1,0,97,0,0,not_good_for_pharm3,13,1,1,1,good_up_to_gIncr17,1,1,1,From -75 to -60,good_up_to_gIncr17
+D101210,D101210,36,26,12,1,from-70to-60,good_response,from-70to-60,good_response,0,0,0,1,0,0,1,102,0,0,spontaneous,14,1,0,0,spontaneous,1,0,0,NA,spontaneous
+B100110,B100110,27,19,13,1,from-75to-60,little_response,from-75to-60,little_response,1,0,1,1,0,1,0,95,0,0,no_response,15,1,0,0,no_response,1,0,0,NA,no_response
+A092110,A092110,8,7,14,1,from-75to-60,good_response,from-74to-60,good_response,1,1,1,1,0,1,0,95,1,1,good_up_to_gIncr67,16,1,1,1,good_up_to_gIncr67,1,1,1,From -73 to -60,good_up_to_gIncr67
+E092910,E092910,24,18,15,1,from-75to-60,no_response,from-75to-60,no_response,1,0,1,1,0,1,0,95,0,0,no_response,17,1,0,0,no_response,1,0,0,NA,no_response
+E101310,E101310,46,33,16,1,from-75to-60,good_response,from-75to-60,good_response,1,1,0,0,0,1,0,95,0,0,no_response,18,1,0,0,no_response,1,0,0,NA,no_response
+D100810,D100810,31,23,17,1,from-75to-60,little_response,from-75to-60,little_response,1,1,1,0,0,0,1,102,1,1,good_up_to_gIncr33,19,1,0,0,spontaneous,1,0,0,NA,spontaneous
+E101210,E101210,37,27,18,1,from-75to-60,good_response,from-75to-60,good_response,1,1,0,0,0,0,1,102,1,1,good_up_to_gIncr67,20,1,1,1,good_up_to_gIncr67,1,1,1,From -75 to -60,good_up_to_gIncr67
+C092810,C092810,18,13,19,1,from-74to-60,good_response,from-74to-60,good_response,1,0,1,0,0,1,0,99,1,1,good_up_to_gIncr33,21,1,1,1,good_up_to_gIncr33,1,1,1,From -74 to -61,good_up_to_gIncr33
+F101210,F101210,38,28,20,1,from-67to-60,good_response,from-62to-60,good_response,0,0,1,0,1,0,0,97,0,0,spontaneous,22,1,0,0,spontaneous,1,0,0,NA,spontaneous
+M101210,M101210,42,30,21,1,from-75to-60,good_response,from-75to-60,good_response,1,1,1,0,0,1,0,95,1,1,good_up_to_gIncr33,23,1,1,1,good_up_to_gIncr17,1,1,1,From -75 to -60,good_up_to_gIncr17
+A101210,A101210,33,24,22,1,from-75to-60,no_response,from-75to-60,no_response,1,1,1,0,0,1,0,99,0,0,not_good_for_pharm3,24,1,0,0,good_up_to_gIncr8,1,0,0,NA,not_good_for_pharm3
+E092710,E092710,15,11,23,1,from-75to-60,little_response,from-75to-60,little_response,1,0,0,1,0,1,0,99,1,1,good_up_to_gIncr17,25,1,1,1,good_up_to_gIncr17,1,1,1,From -70 to -60,good_up_to_gIncr17
+B101310,B101310,44,31,24,1,from-75to-60,good_response,from-75to-60,good_response,1,1,0,0,1,0,0,102,1,0,good_up_to_gIncr67,26,0,1,0,good_up_to_gIncr67,0,1,0,NA,good_up_to_gIncr67
+C092110,C092110,9,8,25,1,from-75to-60,okay_response,from-72to-60,okay_response,0,0,1,0,0,1,0,97,0,0,good_up_to_gIncr8,27,0,0,0,good_up_to_gIncr8,0,0,0,NA,good_up_to_gIncr8
+C092910,C092910,22,16,26,1,from-75to-60,good_response,from-75to-60,good_response,1,0,1,0,0,0,1,101,1,0,good_up_to_gIncr33,28,0,1,0,good_up_to_gIncr33,0,1,0,NA,good_up_to_gIncr33
+A092810,A092810,17,12,27,1,from-74to-60,good_response,from-74to-60,good_response,1,1,1,0,0,1,0,99,1,1,good_up_to_gIncr33,29,1,1,1,good_up_to_gIncr33,0,1,0,NA,good_up_to_gIncr33
+D091810,D091810,4,4,28,1,from-75to-60,good_response,from-75to-60,good_response,1,1,1,1,0,1,0,97,1,0,good_up_to_gIncr33,30,0,1,0,good_up_to_gIncr17,0,1,0,NA,good_up_to_gIncr17
+F091810,F091810,6,6,29,1,from-75to-60,good_response,from-74to-60,good_response,1,1,1,1,0,1,0,94,1,0,good_up_to_gIncr33,31,0,1,0,good_up_to_gIncr33,0,1,0,NA,good_up_to_gIncr33
+C092710,C092710,13,10,30,1,none,spontaneous,none,spontaneous,0,1,1,1,0,1,0,95,0,0,spontaneous,32,0,0,0,spontaneous,0,0,0,NA,spontaneous
+B091810,B091810,3,3,31,1,from-75to-60,good_response,from-72to-60,good_response,0,0,1,0,1,0,0,92,0,0,good_up_to_gIncr4,33,1,0,0,good_up_to_gIncr4,0,0,0,NA,good_up_to_gIncr4
+A092910,A092910,21,15,32,0,NA,NA,NA,NA,0,1,1,1,0,1,0,95,0,0,little_response,35,0,0,0,little_response,0,0,0,NA,little_response
+A100810,A100810,29,21,33,0,NA,NA,NA,NA,0,1,1,1,0,0,1,102,1,0,good_up_to_gIncr67,36,0,1,0,good_up_to_gIncr67,0,1,0,NA,good_up_to_gIncr67
+D091710,D091710,1,1,NaN,0,NA,NA,NA,NA,0,1,1,1,1,0,0,99,0,0,no_response,34,0,0,0,no_response,0,0,0,NA,no_response
+G091810,G091810,7,NaN,NaN,0,NA,NA,NA,NA,0,0,1,0,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+F092210,F092210,10,NaN,NaN,0,NA,NA,NA,NA,0,1,1,0,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+A092710,A092710,11,NaN,NaN,0,NA,NA,NA,NA,0,1,0,0,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+B092710,B092710,12,9,NaN,0,NA,NA,NA,NA,0,1,1,1,1,0,0,99,0,0,no_response,11,0,0,0,no_response,0,0,0,NA,no_response
+D092710,D092710,14,NaN,NaN,0,NA,NA,NA,NA,0,0,1,1,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+F092710,F092710,16,NaN,NaN,0,NA,NA,NA,NA,0,1,1,1,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+E092810,E092810,19,NaN,NaN,0,NA,NA,NA,NA,0,0,1,0,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+D092910,D092910,23,17,NaN,0,NA,NA,NA,NA,0,1,1,1,1,0,0,97,0,0,no_response,3,0,0,0,no_response,0,0,0,NA,no_response
+F092910,F092910,25,NaN,NaN,0,NA,NA,NA,NA,0,0,1,1,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+A100110,A100110,26,NaN,NaN,0,NA,NA,NA,NA,0,1,1,1,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+E100810,E100810,32,NaN,NaN,0,NA,NA,NA,NA,0,0,1,1,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+B101210,B101210,34,NaN,NaN,0,NA,NA,NA,NA,0,0,1,0,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+G101210,G101210,39,NaN,NaN,0,NA,NA,NA,NA,0,0,1,0,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+J101210,J101210,41,NaN,NaN,0,NA,NA,NA,NA,0,1,1,1,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
+A101310,A101310,43,NaN,NaN,0,NA,NA,NA,NA,0,1,1,0,NaN,NaN,NaN,NaN,0,0,NA,NaN,0,0,0,NA,0,0,0,NA,NA
