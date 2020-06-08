@@ -1,0 +1,744 @@
+/*------------------------------------------------------------------------------
+
+    FUNCTIONS FOR BUILDING TC NEURON AND SIMULATING IPSC RESPONSE
+    --------------------------------------------------------------------------
+
+    Requires:
+        cd/TC3.tem
+        cd/gabab_m3ha.mod
+    Used by:
+        cd/m3ha_neuron_run_and_analyze.m
+
+    File History:
+    CL 2013-12    Adapted from Destexhe & Neubig 1997
+    CL 2013-08-09 Modified for pharm experiments
+    CL 2014-05-10 Modified for 4 compartment model with independently 
+                  adjustable parameters for two distal-most compartments.
+    AL 2016-07-18 Modified to find correct holdcurrent (added hold & HC)
+    AL 2016-07-22 Modified to record gGabab
+    AL 2016-10-03 Added CP for current pulse; made tstop an argument
+    AL 2016-10-04 Added many annotations; changed TC.dend[0].ghbar_Ih & 
+                    TC.dend[0].pcabar_IT to be multiplied by corrD
+    AL 2016-10-04 Changed the method for execution to be from a 
+                    here document written in the Matlab code directly
+    AL 2016-10-04 Removed holdcurrent from sim() arguments
+    AL 2016-10-07 Added iCp to record CP.i
+    AL 2016-10-20 Renamed object "s" as "IPSC"
+    AL 2016-10-21 Removed access TC.dend & changed NetStim(1) to 
+                    just NetStim()
+    AL 2017-01-14 Build the TC neuron with arguments: 
+                    'diam_soma', 'L_dend1', 'diam_dend1', 
+                    'L_dend2', 'diam_dend2'
+    AL 2017-01-14 Added TC4_pas.tem so that active channels can be turned 
+                    off when performing passive fitting
+    AL 2017-04-22 Removed ccivamp
+    AL 2017-05-15 Changed diam_dend1 to diam_dend1tosoma and 
+                    diam_dend2 to diam_dend2to1
+    AL 2017-05-15 Made buildMode the last argument of build()
+    AL 2017-05-15 No longer uses TC4_pas.tem but passes 
+                    an argument useactive to TC4.tem instead
+    AL 2017-07-19 Now initializes cai0_ca_ion and cao0_ca_ion here
+    AL 2017-07-27 Reorganized arguments for sim(); Parameters are now adjusted
+                    independently of sim()
+    AL 2017-07-27 List arguments
+    AL 2017-07-27 Removed adjust_dendlength() and 
+                    added distdendpercent to build()
+    AL 2017-07-27 Separated adjust_pas() into 
+                    adjust_globalpas() and adjust_leak()
+    AL 2017-07-27 Renamed dend1 -> dend
+    AL 2017-08-29 Now uses TC3.tem instead of TC4.tem
+    AL 2018-05-18 Changed cprwinOrig from [100, 260] to [0, 360]
+    AL 2018-08-15 Updated usage of TC3
+    AL 2018-10-01 Added holdcurrentNoise
+    AL 2018-10-15 Updated usage of TC3
+    AL 2018-11-01 Made corrD an argument of build()
+    AL 2018-11-12 Now loads stdgui.hoc and uses cvode_active()
+    AL 2018-11-12 Changed VC.dur1 to timeToStabilize
+    AL 2019-01-08 Now saves dendritic voltage for the current pulse response
+                    even with noise
+    AL 2019-10-13 Updated simulated data column numbers
+    AL 2019-10-31 Updated sTC3 -> TC3cell()
+    AL 2019-11-13 Added the 6th argument to the call to TC3cell()
+    AL 2019-12-19 Now always records dendritic voltages
+    AL 2019-12-19 Renamed simMode -> buildMode
+    AL 2019-12-27 Added useHH as the 6th argument for build()
+    AL 2019-12-28 Now outputs channel variables on dendrites as well
+    AL 2019-12-29 Now saves passive currents as well
+    AL 2020-01-02 Added tauhMode
+    AL 2020-03-09 Now doesn't use CVode when useHH is true
+    AL 2020-04-27 Now makes useCvode an optional argument for sim()
+    AL 2020-04-27 Now makes secondOrder an optional argument for sim()
+    AL 2020-04-28 Changed timeToStabilize from 2000 to 3000
+
+------------------------------------------------------------------------------*/
+
+/* Load libraries */
+load_file("stdgui.hoc")
+
+/* Load templates */
+load_file("TC3.tem")    // template for TC cell, USAGE: new TC3cell()
+
+/* Set experimental parameters */
+celsius = 33            // Temperature: Christine probably incubated her slices 
+                        //    at 33 degrees Celsius
+                        // Note: Destexhe used 36 degrees Celsius
+cpAmp = -0.050          // Approximate current pulse amplitude in nA 
+                        //    (used for setting default)
+cpDur = 10              // Current pulse duration in the experiments (ms)
+ipscTimeOrig = 1000     // Time of IPSC application in the experiments (ms), 
+                        //    original value
+
+/* Set simulation parameters that must be 
+    consistent with singleneuronfitting.m */
+cpStart = 100           // Current pulse start time (ms)
+                        // This is only approximate in the experiments, 
+                        //  but the data trace is realigned 
+                        //  in singleneuronfitting.m
+timeToStabilize = 3000  // Time to ensure that state variables 
+                        //  for all channels are stabilized
+                        //  2011-07-20 to allow sim to settle
+ipscDur = 7000          // Duration of IPSC application (ms), for fitting
+                        // This is probably shorter what was applied 
+                        //  in some of the sweeps, but IPSC duration in 
+                        //  all sweeps should be longer than this
+
+/* Set other simulation parameters */
+vcRs = 0.01             // Voltage clamp series resistance in MOhm
+
+/******************************************************************************/
+
+/* Object declarations */
+objref TC               // Class: TC3cell, a template, defined in TC3.tem
+objref gababsyn         // Class: gabab, a POINT_PROCESS, 
+                        //          defined in gabab_m3ha.mod
+objref CP, HC           // Class: IClamp, a POINT_PROCESS
+objref VC               // Class: SEClamp, a POINT_PROCESS
+objref IPSC             // Class: NetStim, an ARTIFICIAL_CELL
+
+objref net              // Class: NetCon
+objref TCvF             // Class: File
+objref outMat           // Class: Matrix
+
+objref holdcurrentAmp   // Class: Random
+objref currentNeeded    // Class: Vector
+objref tvec
+objref iGabab, gGabab, iCp, iHc, iDclamp, iExt
+objref vSoma, vDend1, vDend2
+objref iPasSoma, iPasDend1, iPasDend2
+objref ITicaSoma, ITmSoma, ITminfSoma, IThSoma, IThinfSoma
+objref IHihSoma, IHmSoma
+objref IAikSoma, IAm1Soma, IAh1Soma, IAm2Soma, IAh2Soma
+objref IKIRikSoma, IKIRmSoma
+objref INAPinaSoma, INAPmSoma, INAPhSoma
+objref ITicaDend1, ITmDend1, ITminfDend1, IThDend1, IThinfDend1
+objref IHihDend1, IHmDend1
+objref IAikDend1, IAm1Dend1, IAh1Dend1, IAm2Dend1, IAh2Dend1
+objref IKIRikDend1, IKIRmDend1
+objref INAPinaDend1, INAPmDend1, INAPhDend1
+objref ITicaDend2, ITmDend2, ITminfDend2, IThDend2, IThinfDend2
+objref IHihDend2, IHmDend2
+objref IAikDend2, IAm1Dend2, IAh1Dend2, IAm2Dend2, IAh2Dend2
+objref IKIRikDend2, IKIRmDend2
+objref INAPinaDend2, INAPmDend2, INAPhDend2
+
+/* String declarations */
+strdef TCfile           // file name for output file
+
+/******************************************************************************/
+
+/* Procedure to build a TC neuron and set up electrodes/synapses */
+// Usage: build(buildMode, diamSoma, LDend, diamDend)
+proc build() {
+// $s1 = whether containing only passive or also active parameters (buildMode)
+// $2 = diameter of soma [um] (diamSoma)
+// $3 = length of dend1 + dend2 [um] (LDend)
+// $4 = diameter of dend1 & dend2 [um] (diamDend)
+// $5 = dendritic surface area correction factor (corrD)
+// $6 = whether to use HH channels (useHH)
+
+    /* Initialize GLOBAL variables */
+    cai0_ca_ion = 2.4e-4            // initial intracellular [Ca++] (mM)
+    cao0_ca_ion = 2                 // initial extracellular [Ca++] (mM)
+
+    /* Build the TC neuron with arguments: 
+        'useactive', 'diamSoma', 'LDend', 'diamDend'
+        TC3cell defined in TC3.tem */
+    if (strcmp($s1, "passive") == 0) {          // strcmp returns 0 if identical
+        // Build the TC neuron with leak channel only
+        TC = new TC3cell(0, $2, $3, $4, $5, $6)
+    } else {
+        // Build the TC neuron with active channels
+        TC = new TC3cell(1, $2, $3, $4, $5, $6)
+    }
+
+    /* Set up the current pulse for passive fitting */
+    TC.soma CP = new IClamp(0.5)    // current pulse electrode at the center of soma
+    CP.del = timeToStabilize + cpStart
+    CP.dur = cpDur                  // value consistent with experiment
+    CP.amp = cpAmp                  // default amplitude is most likely consistent with experiment
+                                    //  but is also extracted from data in optimizergui_4compgabab.m
+                                    //  and made an argument for sim()
+
+    /* Add a GABAB synapse to the soma */
+    gababsyn = new gabab()          // gabab defined in gabab_m3ha.mod; it has a NET_RECEIVE block
+    TC.soma gababsyn.loc(0.5)       // Place synapse/electrode on the center of soma,
+                                    //  consistent with dclamp experiments
+    gababsyn.Ninputs = 1            // Only one synapse/electrode
+
+    /* Set up the GABAB IPSC stimulation */
+    IPSC = new NetStim()
+    IPSC.interval = ipscDur         // time between events (since there is only one, set to duration)
+    IPSC.number = 1                 // number of events
+    IPSC.start = timeToStabilize + ipscTimeOrig    
+                                    // start time of first event
+    IPSC.noise = 0                  // 0 - deterministic; 1 - fractional randomness
+    net = new NetCon(IPSC, gababsyn, 0, 0, 1)
+                                    // threshold == 0 mV; delay == 0 ms;
+                                    // weight == 1 (prob of channel activation)
+}
+
+/* Procedure for changing global passive parameters */
+// Usage: adjust_globalpas(cm, Ra, corrD)
+proc adjust_globalpas() {
+// $1 = specific membrane capacitance [uF/cm^2] (cm)
+// $2 = axial resistivity [Ohm-cm] (Ra)
+// $3 = dendritic surface area correction factor [1] (corrD)
+    
+    /* Apply dendritic correction factor for all sections */
+    forall {  
+        cm = $1 * $3
+        Ra = $2
+    }
+    /* Dis-apply dendritic correction factor for soma */
+    TC.soma.cm = $1
+
+}
+
+/* Procedure for changing passive leak channel parameters */
+// Usage: adjust_leak(gpas, epas, corrD)
+proc adjust_leak() {
+// $1 = leak conductance [S/cm^2] (gpas)
+// $2 = leak reversal potential [mV] (epas)
+// $3 = dendritic surface area correction factor [1] (corrD)
+    
+    /* Apply dendritic correction factor for all sections */
+    forall {  
+        g_pas = $1 * $3
+        e_pas = $2
+    }
+    /* Dis-apply dendritic correction factor for soma */
+    TC.soma.g_pas = $1
+
+}
+
+/* Procedure for changing T-type calcium channel parameters */
+// Usage: adjust_IT(pcabarITSoma, pcabarITDend1, pcabarITDend2, shiftmIT, 
+//                  shifthIT, slopemIT, slopehIT, corrD)
+proc adjust_IT() {
+// $1 = maximum Ca++ permeability [cm/s] of IT at soma (pcabarITSoma)
+// $2 = maximum Ca++ permeability [cm/s] of IT at dend1 (pcabarITDend1)
+// $3 = maximum Ca++ permeability [cm/s] of IT at dend2 (pcabarITDend2)
+// $4 = depolarizing shift [mV] of activation curve (shiftmIT)
+// $5 = depolarizing shift [mV] of inactivation curve (shifthIT)
+// $6 = scaling factor [1] for slope of activation curve (slopemIT)
+// $7 = scaling factor [1] for slope of inactivation curve (slopehIT)
+// $8 = dendritic surface area correction factor [1] (corrD)
+// $9 = tauh mode [1] (tauhMode)
+
+    TC.soma.pcabar_IT = $1
+    TC.dend[0].pcabar_IT = $2 * $8
+    TC.dend[1].pcabar_IT = $3 * $8
+
+    TC.soma.shiftm_IT = $4
+    TC.dend[0].shiftm_IT = $4
+    TC.dend[1].shiftm_IT = $4
+
+    TC.soma.shifth_IT = $5
+    TC.dend[0].shifth_IT = $5
+    TC.dend[1].shifth_IT = $5
+
+    TC.soma.slopem_IT = $6
+    TC.dend[0].slopem_IT = $6
+    TC.dend[1].slopem_IT = $6
+
+    TC.soma.slopeh_IT = $7
+    TC.dend[0].slopeh_IT = $7
+    TC.dend[1].slopeh_IT = $7
+
+    TC.soma.tauhmode_IT = $9
+    TC.dend[0].tauhmode_IT = $9
+    TC.dend[1].tauhmode_IT = $9
+}
+
+/* Procedure for changing H channel parameters */
+// Usage: adjust_Ih(ghbarSoma, ghbarDend1, ghbarDend2, eh, shiftmIh, corrD)
+proc adjust_Ih() {
+// $1 = maximum conductance [S/cm2] of Ih at soma (ghbarSoma)
+// $2 = maximum conductance [S/cm2] of Ih at dend1 (ghbarDend1)
+// $3 = maximum conductance [S/cm2] of Ih at dend2 (ghbarDend2)
+// $4 = reversal potential [mV] of Ih (eh)
+// $5 = depolarizing shift [mV] of activation curve (shiftmIh)
+// $6 = dendritic surface area correction factor [1] (corrD)
+
+    TC.soma.ghbar_Ih = $1
+    TC.dend[0].ghbar_Ih = $2 * $6
+    TC.dend[1].ghbar_Ih = $3 * $6
+
+    TC.soma.eh_Ih = $4
+    TC.dend[0].eh_Ih = $4
+    TC.dend[1].eh_Ih = $4
+
+    TC.soma.shiftm_Ih = $5
+    TC.dend[0].shiftm_Ih = $5
+    TC.dend[1].shiftm_Ih = $5
+ 
+}
+
+/* Procedure for changing inward-rectifying potassium channel parameters */
+// Usage: adjust_IKir(gkbarIKirSoma, gkbarIKirDend1, gkbarIKirDend2, corrD)
+proc adjust_IKir() {
+// $1 = maximum conductance [S/cm2] of IKir at soma (gkbarIKirSoma)
+// $2 = maximum conductance [S/cm2] of IKir at dend1 (gkbarIKirDend1)
+// $3 = maximum conductance [S/cm2] of IKir at dend2 (gkbarIKirDend2)
+// $4 = dendritic surface area correction factor [1] (corrD)
+
+    TC.soma.gkbar_IKir = $1
+    TC.dend[0].gkbar_IKir = $2 * $4
+    TC.dend[1].gkbar_IKir = $3 * $4
+
+}
+
+/* Procedure for changing A-Type potassium channel parameters */
+// Usage: adjust_IA(gkbarIASoma, gkbarIADend1, gkbarIADend2, corrD)
+proc adjust_IA() {
+// $1 = maximum conductance [S/cm2] of IA at soma (gkbarIASoma)
+// $2 = maximum conductance [S/cm2] of IA at dend1 (gkbarIADend1)
+// $3 = maximum conductance [S/cm2] of IA at dend2 (gkbarIADend2)
+// $4 = dendritic surface area correction factor [1] (corrD)
+
+    TC.soma.gkbar_IA = $1
+    TC.dend[0].gkbar_IA = $2 * $4
+    TC.dend[1].gkbar_IA = $3 * $4
+
+}
+
+/* Procedure for changing persistent sodium channel parameters */
+// Usage: adjust_INaP(gnabarINaPSoma, gnabarINaPDend1, gnabarINaPDend2, corrD)
+proc adjust_INaP() {
+// $1 = maximum conductance [S/cm2] of INaP at soma (gnabarINaPSoma)
+// $2 = maximum conductance [S/cm2] of INaP at dend1 (gnabarINaPDend1)
+// $3 = maximum conductance [S/cm2] of INaP at dend2 (gnabarINaPDend2)
+// $4 = dendritic surface area correction factor [1] (corrD)
+
+    TC.soma.gnabar_INaP = $1
+    TC.dend[0].gnabar_INaP = $2 * $4
+    TC.dend[1].gnabar_INaP = $3 * $4
+
+}
+
+/* Procedure to run a simulation */
+// Usage: sim(buildMode, outputFileName, tstop, holdpotential, 
+//          currentPulseAmplitude, gababsyn.amp, gababsyn.Trise, 
+//          gababsyn.TfallFast, gababsyn.TfallSlow, gababsyn.w, 
+//          customholdcurrentflag, holdcurrentSupplied, holdcurrentNoise, useHH)
+proc sim() {    local holdpotential holdcurrent holdcurrentSupplied useHH \
+                        useCvode secondOrder
+// $s1 = whether containing only passive or also active parameters (buildMode)
+// $s2 = name of output file (outfilename)
+// $3 = time [ms] to end simulation (tstop)
+// $4 = membrane potential to hold at [mV] (holdpotential)
+// $5 = current pulse amplitude [nA] (currentPulseAmplitude)
+// $6 = maximum amplitude [uS] of gabab conductance (gababsyn.amp)
+// $7 = rise time constant [ms] of gabab conductance (gababsyn.Trise)
+// $8 = fast decay time constant [ms] of gabab conductance (gababsyn.TfallFast)
+// $9 = slow decay time constant [ms] of gabab conductance (gababsyn.TfallSlow)
+// $10 = weight of fast decay of gabab conductance (gababsyn.w)
+// $11 = whether to supply a custom holding current (customholdcurrentflag)
+// $12 = holding current [nA] (holdcurrentSupplied)
+// $13 = standard deviation of noise for the holding current (holdcurrentNoise)
+// $14 = whether to use HH channels (useHH)
+// $15 = whether to use CVODE (useCvode)
+// $16 = whether to use the Crank-Nicholson method (secondOrder)
+
+    /* Read in output file name */
+    sprint(TCfile, $s2)             // print to a string, TCfile
+
+    /* Read in parameter values
+        Assume paramnames order designated in optimizergui_4compgabab.m */
+
+    // General simulation parameters
+    tstop = $3                      // 10000 ms for full simulation, 2500 ms for passive fit
+    holdpotential = $4              // membrane potential to hold at (mV)
+
+    // Current pulse parameters
+    CP.amp = $5                     // current pulse amplitude (nA) (about -0.050 nA in the experiments)
+
+    // GABAB IPSC parameters
+    gababsyn.amp = $6               // maximum amplitude (uS) of gabab conductance
+    gababsyn.Trise = $7             // rise time constant (ms) of gabab conductance
+    gababsyn.TfallFast = $8         // fast decay time constant (ms) of gabab conductance
+    gababsyn.TfallSlow = $9         // slow decay time constant (ms) of gabab conductance
+    gababsyn.w = $10                // weight of fast decay (out of 1; weight of slow decay is 1 - w)
+
+    // Holding current parameters
+    holdcurrentSupplied = $12
+    holdcurrentNoise = $13
+
+    // Whether HH2.mod was inserted
+    useHH = $14
+
+    /* Determine whether to use CVODE
+        Note: HH2 doesn't work with cvode
+        However, this lowers simulation time by two orders of magnitude */
+    if (numarg() >= 15) {
+        useCvode = $15
+    } else {
+        if (holdcurrentNoise == 0 && useHH == 0) {
+            useCvode = 1
+        } else {
+            useCvode = 0
+        }
+    }
+
+    /* Determine on integration method */
+    if (numarg() >= 16) {
+        secondOrder = $16
+    } else {
+        secondOrder = 0         // Backward Euler (default)
+        // secondorder = 1      // Crank-Nicholson
+        // secondorder = 2      // Crank-Nicholson with ion current correction
+                        // 2016-10-14 - Doesn't seem to change the trace much
+                        // However, this should be tested in the future 
+                        //  to see if final results change
+    }
+
+    /* Apply CVODE or set time step */
+    if (useCvode == 1) {
+        /* Use CVODE */
+        cvode_active(1)
+    } else {
+        /* Don't use CVODE */
+        cvode_active(0)
+
+        /* Set time step to 0.1 ms (10 kHz) */
+        dt = 0.1
+    }
+
+    /* Set integration method */
+    secondorder = secondOrder
+
+    /* Decide on the holding current (nA) */
+    if ($11) {
+        /* Use a supplied holding current */
+        holdcurrent = holdcurrentSupplied
+    } else {
+        /* Use a voltage clamp to find holdcurrent based on holdpotential, 
+            then destroy voltage clamp */
+        objref HC                       // Destroy previous current clamp
+        TC.soma VC = new SEClamp(0.5)   // voltage clamp at center of soma
+        VC.rs = vcRs                    // series resistance in MOhm
+        VC.dur1 = timeToStabilize       // time for clamp to reach steady state
+        VC.amp1 = holdpotential         // clamp to desired holding potential
+
+        currentNeeded = new Vector()    // record current needed to clamp
+        currentNeeded.record(&VC.i)
+        vSoma = new Vector()            // record soma voltage
+        vSoma.record(&TC.soma.v)
+
+        /* Start a voltage clamp simulation */
+        finitialize(holdpotential)
+        while(t < VC.dur1) {
+            fadvance()
+        }
+
+        /* Record the last voltage of voltage clamp simulation, 
+            for printing purposes */
+        lastVoltage = vSoma.x[vSoma.size()-1]
+        print "vSoma converged to ", lastVoltage, "mV"
+
+        /* Record the final steady state current needed to clamp voltage 
+            at holdpotential */
+        holdcurrent = currentNeeded.x[currentNeeded.size()-1]
+        print "holdcurrent is now ", holdcurrent, "nA"
+
+        /* Destroy the voltage clamp */
+        objref VC, currentNeeded, vSoma
+    }
+
+    /* Inject holding current (in nA)
+        electrode at center of soma 
+        from very beginning, throughout the simulation */
+    TC.soma HC = new IClamp(0.5)
+    HC.del = 0
+    HC.dur = tstop
+    HC.amp = holdcurrent
+
+    if (holdcurrentNoise != 0) {
+        /* Inject a noisy holding current 
+            Use a Gaussian distribution */
+        holdcurrentAmp = new Random()
+        holdcurrentAmp.normal(holdcurrent, holdcurrentNoise ^ 2)
+        holdcurrentAmp.play(&HC.amp)
+    }
+
+    /* Set up vectors for recording variables during the simulation */
+    tvec = new Vector()
+    tvec.record(&t)
+
+    /* Record voltage traces of all compartments */
+    vSoma = new Vector()
+    vSoma.record(&TC.soma.v)
+    vDend1 = new Vector()
+    vDend1.record(&TC.dend[0].v)
+    vDend2 = new Vector()
+    vDend2.record(&TC.dend[1].v)
+
+    /* Record currents and conductances */
+    iGabab = new Vector()
+    iGabab.record(&gababsyn.i)
+    gGabab = new Vector()
+    gGabab.record(&gababsyn.g)
+    iCp = new Vector()
+    iCp.record(&CP.i)
+    iHc = new Vector()
+    iHc.record(&HC.i)
+
+    /* Record passive currents in all compartments */
+    iPasSoma = new Vector()
+    iPasSoma.record(&TC.soma.i_pas)
+    iPasDend1 = new Vector()
+    iPasDend1.record(&TC.dend[0].i_pas)
+    iPasDend2 = new Vector()
+    iPasDend2.record(&TC.dend[1].i_pas)
+    
+    /* Record state variables of active mechanisms if in active build mode */
+    if (holdcurrentNoise == 0 && strcmp($s1, "active") == 0) {
+        ITicaSoma = new Vector()
+        ITicaSoma.record(&TC.soma.ica_IT)
+        ITmSoma = new Vector()
+        ITmSoma.record(&TC.soma.m_IT)
+        ITminfSoma = new Vector()
+        ITminfSoma.record(&TC.soma.minf_IT)
+        IThSoma = new Vector()
+        IThSoma.record(&TC.soma.h_IT)
+        IThinfSoma = new Vector()
+        IThinfSoma.record(&TC.soma.hinf_IT)
+        IHihSoma = new Vector()
+        IHihSoma.record(&TC.soma.ih_Ih)
+        IHmSoma = new Vector()
+        IHmSoma.record(&TC.soma.m_Ih)
+        IAikSoma = new Vector()
+        IAikSoma.record(&TC.soma.ik_IA)
+        IAm1Soma = new Vector()
+        IAm1Soma.record(&TC.soma.m1_IA)
+        IAh1Soma = new Vector()
+        IAh1Soma.record(&TC.soma.h1_IA)
+        IAm2Soma = new Vector()
+        IAm2Soma.record(&TC.soma.m2_IA)
+        IAh2Soma = new Vector()
+        IAh2Soma.record(&TC.soma.h2_IA)
+        IKIRikSoma = new Vector()
+        IKIRikSoma.record(&TC.soma.ik_IKir)
+        IKIRmSoma = new Vector()
+        IKIRmSoma.record(&TC.soma.minf_IKir)
+        INAPinaSoma = new Vector()
+        INAPinaSoma.record(&TC.soma.ina_INaP)
+        INAPmSoma = new Vector()
+        INAPmSoma.record(&TC.soma.minf_INaP)
+        INAPhSoma = new Vector()
+        INAPhSoma.record(&TC.soma.h_INaP)
+
+        ITicaDend1 = new Vector()
+        ITicaDend1.record(&TC.dend[0].ica_IT)
+        ITmDend1 = new Vector()
+        ITmDend1.record(&TC.dend[0].m_IT)
+        ITminfDend1 = new Vector()
+        ITminfDend1.record(&TC.dend[0].minf_IT)
+        IThDend1 = new Vector()
+        IThDend1.record(&TC.dend[0].h_IT)
+        IThinfDend1 = new Vector()
+        IThinfDend1.record(&TC.dend[0].hinf_IT)
+        IHihDend1 = new Vector()
+        IHihDend1.record(&TC.dend[0].ih_Ih)
+        IHmDend1 = new Vector()
+        IHmDend1.record(&TC.dend[0].m_Ih)
+        IAikDend1 = new Vector()
+        IAikDend1.record(&TC.dend[0].ik_IA)
+        IAm1Dend1 = new Vector()
+        IAm1Dend1.record(&TC.dend[0].m1_IA)
+        IAh1Dend1 = new Vector()
+        IAh1Dend1.record(&TC.dend[0].h1_IA)
+        IAm2Dend1 = new Vector()
+        IAm2Dend1.record(&TC.dend[0].m2_IA)
+        IAh2Dend1 = new Vector()
+        IAh2Dend1.record(&TC.dend[0].h2_IA)
+        IKIRikDend1 = new Vector()
+        IKIRikDend1.record(&TC.dend[0].ik_IKir)
+        IKIRmDend1 = new Vector()
+        IKIRmDend1.record(&TC.dend[0].minf_IKir)
+        INAPinaDend1 = new Vector()
+        INAPinaDend1.record(&TC.dend[0].ina_INaP)
+        INAPmDend1 = new Vector()
+        INAPmDend1.record(&TC.dend[0].minf_INaP)
+        INAPhDend1 = new Vector()
+        INAPhDend1.record(&TC.dend[0].h_INaP)
+
+        ITicaDend2 = new Vector()
+        ITicaDend2.record(&TC.dend[1].ica_IT)
+        ITmDend2 = new Vector()
+        ITmDend2.record(&TC.dend[1].m_IT)
+        ITminfDend2 = new Vector()
+        ITminfDend2.record(&TC.dend[1].minf_IT)
+        IThDend2 = new Vector()
+        IThDend2.record(&TC.dend[1].h_IT)
+        IThinfDend2 = new Vector()
+        IThinfDend2.record(&TC.dend[1].hinf_IT)
+        IHihDend2 = new Vector()
+        IHihDend2.record(&TC.dend[1].ih_Ih)
+        IHmDend2 = new Vector()
+        IHmDend2.record(&TC.dend[1].m_Ih)
+        IAikDend2 = new Vector()
+        IAikDend2.record(&TC.dend[1].ik_IA)
+        IAm1Dend2 = new Vector()
+        IAm1Dend2.record(&TC.dend[1].m1_IA)
+        IAh1Dend2 = new Vector()
+        IAh1Dend2.record(&TC.dend[1].h1_IA)
+        IAm2Dend2 = new Vector()
+        IAm2Dend2.record(&TC.dend[1].m2_IA)
+        IAh2Dend2 = new Vector()
+        IAh2Dend2.record(&TC.dend[1].h2_IA)
+        IKIRikDend2 = new Vector()
+        IKIRikDend2.record(&TC.dend[1].ik_IKir)
+        IKIRmDend2 = new Vector()
+        IKIRmDend2.record(&TC.dend[1].minf_IKir)
+        INAPinaDend2 = new Vector()
+        INAPinaDend2.record(&TC.dend[1].ina_INaP)
+        INAPmDend2 = new Vector()
+        INAPmDend2.record(&TC.dend[1].minf_INaP)
+        INAPhDend2 = new Vector()
+        INAPhDend2.record(&TC.dend[1].h_INaP)
+    }
+
+    /* Simulate IPSC response */
+    finitialize(holdpotential)
+    while(t < tstop) {        
+        fadvance()
+    }
+
+    /* Compute current through a dynamic clamp electrode 
+        Note: An outward current is like withdrawing current through electrode,
+                so simply multiply iGabab by -1 */
+    iDclamp = new Vector()      // Current through a dynamic clamp electrode
+    iDclamp = iGabab.c.mul(-1)
+
+    /* Compute total external current through the electrode */
+    iExt = new Vector()         // Total external current (nA)
+    iExt = iHc.add(iCp)
+    iExt = iExt.add(iDclamp)
+
+    /* Set up output matrix */
+    // voltage traces of all compartments
+    outMat = new Matrix(vSoma.size(), 62)
+    outMat.setcol(0, tvec)
+    outMat.setcol(1, vSoma)
+    outMat.setcol(2, vDend1)
+    outMat.setcol(3, vDend2)
+
+    // currents and conductances
+    outMat.setcol(4, iDclamp)
+    outMat.setcol(5, gGabab)
+    outMat.setcol(6, iCp)
+    outMat.setcol(7, iExt)
+    outMat.setcol(8, iPasSoma)
+    outMat.setcol(9, iPasDend1)
+    outMat.setcol(10, iPasDend2)
+
+    // state variables of active mechanisms if in active build mode
+    if (holdcurrentNoise == 0 && strcmp($s1, "active") == 0) {
+        outMat.setcol(11, ITicaSoma)
+        outMat.setcol(12, ITmSoma)
+        outMat.setcol(13, ITminfSoma)
+        outMat.setcol(14, IThSoma)
+        outMat.setcol(15, IThinfSoma)
+        outMat.setcol(16, IHihSoma)
+        outMat.setcol(17, IHmSoma)
+        outMat.setcol(18, IAikSoma)
+        outMat.setcol(19, IAm1Soma)
+        outMat.setcol(20, IAh1Soma)
+        outMat.setcol(21, IAm2Soma)
+        outMat.setcol(22, IAh2Soma)
+        outMat.setcol(23, IKIRikSoma)
+        outMat.setcol(24, IKIRmSoma)
+        outMat.setcol(25, INAPinaSoma)
+        outMat.setcol(26, INAPmSoma)
+        outMat.setcol(27, INAPhSoma)
+
+        outMat.setcol(28, ITicaDend1)
+        outMat.setcol(29, ITmDend1)
+        outMat.setcol(30, ITminfDend1)
+        outMat.setcol(31, IThDend1)
+        outMat.setcol(32, IThinfDend1)
+        outMat.setcol(33, IHihDend1)
+        outMat.setcol(34, IHmDend1)
+        outMat.setcol(35, IAikDend1)
+        outMat.setcol(36, IAm1Dend1)
+        outMat.setcol(37, IAh1Dend1)
+        outMat.setcol(38, IAm2Dend1)
+        outMat.setcol(39, IAh2Dend1)
+        outMat.setcol(40, IKIRikDend1)
+        outMat.setcol(41, IKIRmDend1)
+        outMat.setcol(42, INAPinaDend1)
+        outMat.setcol(43, INAPmDend1)
+        outMat.setcol(44, INAPhDend1)
+        
+        outMat.setcol(45, ITicaDend2)
+        outMat.setcol(46, ITmDend2)
+        outMat.setcol(47, ITminfDend2)
+        outMat.setcol(48, IThDend2)
+        outMat.setcol(49, IThinfDend2)
+        outMat.setcol(50, IHihDend2)
+        outMat.setcol(51, IHmDend2)
+        outMat.setcol(52, IAikDend2)
+        outMat.setcol(53, IAm1Dend2)
+        outMat.setcol(54, IAh1Dend2)
+        outMat.setcol(55, IAm2Dend2)
+        outMat.setcol(56, IAh2Dend2)
+        outMat.setcol(57, IKIRikDend2)
+        outMat.setcol(58, IKIRmDend2)
+        outMat.setcol(59, INAPinaDend2)
+        outMat.setcol(60, INAPmDend2)
+        outMat.setcol(61, INAPhDend2)
+    }
+
+    /* Write to output file */
+    TCvF = new File()                   // File structure for output file
+    TCvF.wopen(TCfile)                  // open file for writing
+    outMat.fprint(0, TCvF, "%16.8f", "\n")// print output vectors to file
+    TCvF.close                          // close file
+}
+
+/* Procedure for adjusting dendritic length such that 
+    dend[1] (the distal most dendrite) is "$1/100" of of dend[0] + dend[1]
+    NOTE: This is no longer used in m3ha_neuron_create_sim_commands.m */
+// Usage: adjust_dendlength(LDend, distdendpercent)
+proc adjust_dendlength() {                                      // TO REMOVE?
+// $1 = length of dend1 + dend2 [um] (LDend)
+// $2 = percentage of dend that is dend2 [mV] (distdendpercent)
+ 
+    /* Adjust lengths of dend1 and dend2 */
+    TC.dend[0].L = (1 - ($2 / 100)) * $1
+    TC.dend[1].L = ($2 / 100) * $1
+
+    //[ ] need to make sure the dendrites connect up properly   // TO EXAMINE
+
+    print "TC.dend[0].L = ", TC.dend[0].L                     // TO REMOVE
+    print "TC.dend[1].L = ", TC.dend[1].L
+
+}
+
+/******************************************************************************/
+
+/* OLD CODE:
+*/
+
+/******************************************************************************/

@@ -1,0 +1,25 @@
+/*--------------------------------------------------------------
+    DEFINE GLOBAL PARAMETERS AND LOAD PROCEDURES
+    --------------------------------------------
+
+    Requires:
+        cd/m3ha_net.hoc
+    Used by:    
+        ~/Adams_Functions/m3ha_network_launch.m
+
+    File history:
+    2019-10-31 Modified from m3ha_run_2cells.hoc
+
+--------------------------------------------------------------*/
+
+/* Global parameters to be defined at the start of NEURON
+    To be consistent with m3ha_launch.m */
+ncells = 20         // total number of cells in each layer of the network
+celsius = 33        // temperature of experiment (celsius)
+nsp = 2             // number of special RE or TC neurons
+RERErad = 8         // radius of intra-RE connections, Sohal & Huguenard 2004
+                    //    RTCl & Sohal & Huguenard 2003 used 4
+
+/**********************************************************************************************************/
+/* Load procedures for the simulation  */
+load_file("./m3ha_net.hoc")    // ncells must be defined; contains buildnet(), randleak()

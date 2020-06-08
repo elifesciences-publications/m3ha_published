@@ -1,0 +1,62 @@
+/*------------------------------------------------------------------------------
+
+    A hoc-based mechanism for checking for maximum slope and firing events
+
+    See the documentation on hocmech on usage
+    https://www.neuron.yale.edu/neuron/static/docs/help/neuron/neuron/function/hocmech.html
+
+    The suffix for this mechanism is cms
+    USAGE: soma insert cms
+
+    2018-03-27 Created by Adam Lu
+
+------------------------------------------------------------------------------*/
+
+begintemplate CheckMaxSlope
+
+public slope, lastIPSCtime
+
+/* initial() is called when finitialize() is executed */
+proc initial() {
+    // TODO: Define initial values that can be checked
+    slope = 0
+    lastIPSCtime = 0
+}
+
+/* For the standard staggered time step and global variable time step integration methods, after_step() is called at every fadvance when t = t + dt. 
+For the local variable step method, after_step() is called when the individual cell CVode instance finished its solve step. 
+In any case, it is safe to send an event any time after t-dt. */
+proc after_step() { LOCAL vLast, slopeLast
+    // Check whether an IPSC occurred at this time step
+    // TODO: May need to move this part to gabab_m3ha.mod? 
+    //      Create gabab_noHH.mod vs. gabab_withHH.mod?
+    if () {
+        // Update the last IPSC time (ms)
+        lastIPSCtime = t
+    }
+
+    // Compute the slope (dv/dt) of the last time step
+    // Note: dt is the magnitude of the last time step
+    //       vLast is the voltage value saved from the last time step
+    slope = (v($1) - vLast) / dt
+
+    // If the slope decreased, we've reached a maximum, so send an event to 
+    //  the helper artificial neuron
+    if (slope < slopeLast && lastIPSCtime > 0) {
+        // Compute the delay time (ms) since the last IPSC
+        delay = t - lastIPSCtime
+
+        // Send an event to HelperTC.mod with slopeLast, delay as the weights
+        // TODO
+        
+    }
+
+    // Store the voltage and slope values of this time step
+    vLast = v($1)
+    slopeLast = slope
+}
+
+endtemplate CheckMaxSlope
+
+/* Actually make the mechanism with the suffix cms */
+makemech("cms", "CheckMaxSlope") 

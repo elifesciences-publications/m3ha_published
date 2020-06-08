@@ -1,0 +1,317 @@
+/*------------------------------------------------------------------------------
+
+    TEMPLATE FILE FOR DEFINING THALAMOCORTICAL NEURONS
+    --------------------------------------------------
+
+    One compartment model and currents derived from:
+
+     McCormick, D.A. and Huguenard, J.R.  A model of the 
+    electrophysiological properties of thalamocortical relay neurons.  
+    J. Neurophysiology 68: 1384-1400, 1992.
+
+    - passive: parameters idem Rinzel
+    - HH: Traub with higher threshold
+    - IT: m2h, nernst, tau_h modified with double exponential
+    - Ih: Huguenard with Ca++ dependence added, Ca++-binding protein
+    - Ca++: simple decay, faster than McCormick
+
+
+    This model is described in detail in:
+
+    Destexhe, A., Bal, T., McCormick, D.A. and Sejnowski, T.J.
+    Ionic mechanisms underlying synchronized oscillations and propagating
+    waves in a model of ferret thalamic slices. Journal of Neurophysiology
+    76: 2049-2070, 1996.
+    See also http://www.cnl.salk.edu/~alain , http://cns.fmed.ulaval.ca 
+
+
+    Alain Destexhe, Salk Institute and Laval University, 1995
+
+--------------------------------------------------------------------------------
+
+    Requires:    
+        cd/ITGHK.mod
+        cd/ih.mod
+        cd/Ikir.mod
+        cd/IA.mod
+        cd/INaP.mod
+        cd/cadecay.mod
+    Used by:    
+        cd/singleneuron4compgabab.hoc
+
+    2010-06-28      % TC3.tem    Christine Lee 
+                    Modified for 3-compartment model; calls tc3.geo and
+                    incorporates parts of tc3_cc.oc (by Alain Destexhe and 
+                    Mike Neubig, Laval University, 1997)
+    2014-04         % TC4.tem    CLK
+                    added distal dendritic compartment ("dend2") to TC3.tem 
+                    such that dend0[2] variables can have values distinct 
+                    from those of dend0[1]
+    2016-10-20      AL - Moved create compartments to tc4.geo
+    2017-01-14      AL - Removed tc4.geo and set up geometry in init 
+                        with arguments
+    2017-05-15      AL - Changed diam_dend1 to diam_dend1tosoma 
+                        and diam_dend2 to diam_dend2to1
+    2017-05-15      AL - Added useactive
+    2017-07-27      AL - Moved distdendpercent here
+    2017-07-27      AL - Reordered arguments for init()
+    2017-07-27      AL - Renamed dend0 -> dend
+    2017-08-05      AL - Changed ek to -100
+    2017-08-29      AL - Changed back to 3 compartments with the 
+                         dendrites having the same diameter
+    2018-08-15      AL - Changed to fixed diameter ratios but varying lengths
+    2018-10-15      AL - Changed back to 3 compartments with the 
+                         dendrites having the same diameter
+    2018-11-01      AL - Moved h channels to passive parameters
+    2018-11-01      AL - Made corrD an argument
+    2018-12-14      AL - Moved T channels to passive parameters
+    2019-10-31      AL - Incorporated useHH
+    2019-10-31      AL - Moved T & h channels back to active parameters
+    2019-11-19      AL - Changed vtraub_hh2 to -52
+    2020-01-06      AL - Changed vtraub_hh2 to -63
+    2020-01-31      AL - Moved HH2 to soma only
+    2020-02-04      AL - Changed vtraub_hh2 to -65
+    2020-04-27      AL - Changed vtraub_hh2 to -52
+
+------------------------------------------------------------------------------*/
+
+begintemplate TC3cell        // create template for thalamocortical neurons
+
+/* Declare public variables */
+public soma, dend
+
+/* Create compartments (sections) */
+create soma[1], dend[2]
+
+/* Set up geometry and insert currents */
+proc init() { 
+// $1 = whether to use active channels (useactive)
+// $2 = diameter of soma [um] (diamSoma)
+// $3 = length of dend1 + dend2 [um] (LDend)
+// $4 = diameter of dend1 & dend2 [um] (diamDend)
+// $5 = dendritic surface area correction factor (corrD)
+// $6 = whether to use HH channels (useHH)
+
+    /*
+    print "----------------------------------------------"
+    print "   Simplified TC cell with 3 compartments"
+    print "----------------------------------------------"
+    */
+
+    /* Set up geometry with arguments */
+    soma {            /* soma: length set equal to diameter */
+        nseg = 1
+        pt3dclear()
+        pt3dadd(0, 0, 0, $2)         /* x,y,z,diam */
+        pt3dadd(0, $2, 0, $2)
+    }
+
+    dend[0] {        /* proximal dendrite */
+        nseg = 1
+        pt3dclear()
+        pt3dadd(0, $2, 0, $4)
+        pt3dadd(0, $2 + 0.5 * $3, 0, $4)
+    }
+
+    dend[1] {        /* distal dendrite */
+        nseg = 1
+        pt3dclear()
+        pt3dadd(0, $2 + 0.5 * $3, 0, $4)
+        pt3dadd(0, $2 + $3, 0, $4)
+    }
+
+    /* Connect compartments */
+    connect dend[0](0), soma(1)
+    connect dend[1](0), dend[0](1)
+
+    /* Passive parameters that will be varied across cells */
+    corrD = $5      // dendritic surface area correction
+    G_pas = 1e-5    // leak conductance [S/cm^2]
+                    // default value is from TODO
+    E_pas = -80     // leak reversal potential [mV]
+                    // default value is from Rinzel
+
+    /* Insert other currents */
+    forall {
+        insert pas          // leak channels
+        g_pas = G_pas * corrD
+        e_pas = E_pas
+        cm = 0.88 * corrD   // specific membrane capacitance [uF/cm^2]
+                            //    (Destexhe & Neubig 1997)
+        Ra = 173            // axial resistivity [Ohm-cm]
+                            //    (Destexhe & Neubig 1997)
+
+        if ($1) {
+            insert Ih       // hyperpolarization-activated 
+                            //    nonspecific cationic current (h current)
+                            //     defined in Ih.mod 
+                            //    (Amarillo et al 2014)
+
+            insert IT       // low-threshold calcium current (T current)
+                            //    defined in IT.mod
+
+            insert IKir     // inward-rectifying potassium current
+                            //     defined in IKir.mod
+                            //    (Amarillo et al 2014)
+            ek = -100       // K+ reversal potential (mV),
+                            //  based on [K+]out = 2.5 mM, [K+]in = 113 mM 
+                            //  & celsius = 33 degC
+                            
+            insert IA       // fast transient potassium current
+                            //     defined in IA.mod
+                            //    (Amarillo et al 2014)
+
+            insert INaP     // persistent sodium current
+                            //     defined in INaP.mod
+                            //    (Amarillo et al 2014)
+            ena = 88        // Na+ reversal potential (mV)
+                            //  based on [Na+]out = 127.25 mM, [Na+]in = 4.5 mM
+                            //  & celsius = 33 degC
+
+            insert cad      // calcium currents + calcium extrusion
+                            //     defined in cadecay.mod
+                            //    (TODO)
+            depth_cad = 0.1 * corrD     // depth of shell [um]
+            taur_cad = 24               // Ca++ removal time constant [ms]
+            cainf_cad = 2.4e-4          // steady state intracellular [Ca++] [mM]
+
+            // insert Iahp  // after-hyperpolarization potassium current        // TODO: EXAMINE
+                            //     defined in Iahp.mod
+                            //    (Amarillo et al 2014)
+        
+            // insert IKCa  // calcium-activated potassium current              // TODO: EXAMINE
+                            //     defined in IKCa.mod
+                            //    (Amarillo et al 2014)
+                            //     CLK - doesn't do much
+
+            // insert IL    // high-threshold calcium current                   // TODO: EXAMINE
+                            //     defined in IL.mod
+                            //    (Amarillo et al 2014)
+                            //     CLK - doesn't do much to preburst
+
+        }
+    }
+  
+    /* Soma values for those parameters that were 
+        multiplied by corrD need to be replaced */
+    soma {
+        g_pas = G_pas
+        cm = 0.88       // specific membrane capacitance in uF/cm^2
+                        //    (Destexhe & Neubig 1997)
+
+        /* Insert HH2 in the soma if requested */
+        if ($1 && $6) {
+            insert hh2          // READ ena, ek WRITE ina, ik
+            ena = 88    // Na+ reversal potential (mV), 
+                        //  based on [Na+]out = 127.25 mM, [Na+]in = 4.5 mM
+                        //  & celsius = 33 degC
+                        //  ena = 50 is used by Destexhe 2001, 
+                        //      Sohal & Huguenard 2003, Traub 2005
+            ek = -100   // K+ reversal potential (mV), 
+                        //  based on [K+]out = 2.5 mM, [K+]in = 113 mM 
+                        //  & celsius = 33 degC
+                        //  [K+]out = 2.5 mM, [K+]in = 124 mM 
+                        //      & celsius = 33 degC would give -103 mV
+                        //  Destexhe, Sohal used -90 mV; Traub used -95 mV
+            vtraub_hh2 = -65    //-57 //-52 //-47 //-63 // action potential threshold (mV)
+                                //  Amarillo et al 2014 used -48 mV 
+                                //  Destexhe 1998a used -52 mV
+                                //  Destexhe 1998b/2001 used -63 mV
+            gnabar_hh2 = 0.004  // Na+ conductance (S/cm2), 
+                                //      Sohal & Huguenard 2003 used 0.05
+                                //      Destexhe 1998b/2001 used 0.003
+            gkbar_hh2 = 0.001   // K+ conductance (S/cm2), 
+                                //      Sohal & Huguenard 2003 used 0.005
+                                //      Destexhe 1998b/2001 used 0.005
+        }
+    }
+}
+
+endtemplate TC3cell
+
+/*------------------------------------------------------------------------------
+OLD CODE:
+
+    public soma, dend1
+    create soma[1], dend1[3]
+
+// **DELETE BELOW..just trying the tc200.geo
+//create soma, dend1[1], dend2[30], dend3[13], dend4[21], dend5[1]
+//create dend6[31], dend7[9], dend8[33], dend9[47], dend10[27], dend11[19]
+//public soma, dend1, dend2, dend3, dend4, dend5, 
+            dend6, dend7, dend8, dend9, dend10, dend11
+
+
+//xopen("cells/tc200.geo")
+//corrD = 1
+
+
+        g_pas = G_pas * corrD    // 1e-6 (our TC.tem); G_pas * corrD (Destexhe & Neubig 1997)
+        e_pas = E_pas
+        cm = 0.88 * corrD    // 1 (our TC.tem); 0.88 * corrD  (Destexhe & Neubig 1997)
+        Ra = 173        // axial resistivity. 100 (our TC.tem); 173 (Destexhe & Neubig 1997)
+
+        //eh = -40        // reversal
+        //nca_iar = 4        // nb of binding sites for Ca++ on protein
+        //k2_iar = 0.0004        // decay of Ca++ binding on protein
+        //cac_iar = 0.002        // half-activation of Ca++ binding
+        //nexp_iar = 1        // nb of binding sites on Ih channel
+        //k4_iar = 0.001        // decay of protein binding on Ih channel
+        //Pc_iar = 0.01        // half-activation of binding on Ih channel
+        //ginc_iar = 2        // 1 // augm of conductance of bound Ih
+        //ghbar_iar = 1e-5    // low Ih for slow oscillations
+
+        pcabar_itGHK = 1e-5    // .9e-4    // this is set in singleneuron4compgabab
+        qm_itGHK = 3.6        // 2.5        // this is already the default value in ITGHK.mod
+        qh_itGHK = 2.8        // 2.5        // this is already the default value in ITGHK.mod
+
+        taur_cad = 5        // this is already the default value in cadecay.mod
+        cainf_cad = 2.4e-4    // this is already the default value in cadecay.mod
+        kt_cad = 0        // no pump
+        kd_cad = 0        // 1e-4
+
+        //cai = 2.4e-4  
+        //cao = 2
+        //eca = 120
+        ///// from tc3_cc.oc :
+        //shift_mprox_itGHK = -1     ////
+        //shift_itGHK = -1    // screening charge shift + 3 mV error        
+
+        //gkmax_Ikir = 1e-5  // 2.0e-5 default
+
+        //gkmax_IA = 2e-2  // 5.5e-3 default
+
+        // gnamax_INaP = 5.5e-6  // default
+
+        //insert hh2        // Amarillo et al 2014; 
+                                Note: hh2 doesn't work with cvode
+
+    xopen("cells/tc4.geo")    
+
+Arguments: 
+    $2 - diam_soma
+    $3 - L_dend1
+    $4 - diam_dend1
+    $5 - L_dend2
+    $6 - diam_dend2
+
+//        pt3dadd(0, $2, 0, $4)
+//        pt3dadd(0, $2+$3, 0, $4)
+//        pt3dadd(0, $2+$3, 0, $6)
+//        pt3dadd(0, $2+$3+$5/2, 0, $6)
+//        pt3dadd(0, $2+$3+$5/2, 0, $6)
+//        pt3dadd(0, $2+$3+$5, 0, $6)
+        cd/cells/tc4.geo
+
+// $3 = length of dend1 + dend2 [um] (LDend)
+// $4 = diameter of dend1 & dend2 relative to soma [1] (diamDendToSoma)
+// $5 = percentage of dendrite that is dend2 [1] (distDendPercent)
+
+    corrD = 7.954   // dendritic surface area correction
+                    // default value was estimated by fitting 
+                    //    voltage-clamp traces in Destexhe et al 1998a
+
+    soma connect dend[0](0), 1
+    dend[0] connect dend[1](0), 1
+
+------------------------------------------------------------------------------*/
