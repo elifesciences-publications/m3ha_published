@@ -1,10 +1,8 @@
 ## Code
 
-This is analysis and simulation code that goes along with this preprint:
+This is analysis and simulation code that goes along with this eLife article:
 
-[**Nonlinearities between inhibition and T-type calcium channel activity bidirectionally regulate thalamic network oscillations**](https://www.biorxiv.org/content/10.1101/2020.06.02.129601v1)
-
-which is under review at eLife.
+[**Nonlinearities between inhibition and T-type calcium channel activity bidirectionally regulate thalamic network oscillations**](https://elifesciences.org/articles/59548)
 
 Details:
 
